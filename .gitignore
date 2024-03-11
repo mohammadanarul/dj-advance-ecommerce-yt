@@ -104,6 +104,3 @@ ENV/
 config/
 .DS_Store
 bcbd_admin/.DS_Store
-
-#files
-search_customer_info_exel_files/
