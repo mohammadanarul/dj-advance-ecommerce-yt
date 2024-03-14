@@ -1,0 +1,114 @@
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: "on-failure"
+    depends_on:
+      - db
+      - redis-stack
+      - rabbitmq
+    networks:
+      - ecommerce
+
+  db:
+    container_name: ecommerce_db
+    image: postgres:15-alpine
+    ports:
+      - 5433:5432
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=postgres
+    restart: "on-failure"
+    networks:
+      - ecommerce
+  pgadmin:
+    container_name: ecommerce_pgadmin4
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5050:80"
+    volumes:
+       - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - ecommerce
+  redis-stack:
+    image: redis/redis-stack:latest
+    ports:
+      - '6379:6379'
+      - '8001:8001'
+    volumes:
+      - redis-stack:/var/lib/redis-stack
+    environment:
+      - REDIS_ARGS=--save 900 1
+    networks:
+      - ecommerce
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
+      - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+      - ecommerce
+
+  worker:
+    build:
+      context: .
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    command: celery -A ecommerce_project worker -l info
+    depends_on:
+      - web
+      - redis-stack
+      - rabbitmq
+      - db
+    networks:
+      - ecommerce
+
+  cron:
+    build:
+      context: .
+    volumes:
+      - .:/code
+    env_file:
+      - .env
+    command: celery -A ecommerce_project beat -l info
+
+    depends_on:
+      - web
+      - redis-stack
+      - rabbitmq
+      - db
+      - worker
+    networks:
+      - ecommerce
+
+networks:
+  ecommerce:
+    driver: bridge
+
+volumes:
+  db_data:
+  pgadmin_data:
+  mailhog:
+  redis-stack:
